@@ -1,0 +1,76 @@
+name: Run New ETL Pipeline01
+
+on:
+  schedule:
+    - cron: '40 9 * * *'  # Runs at 09:40 UTC daily
+  workflow_dispatch:       # Manual trigger for testing
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # -------------------
+      # Checkout code with full history (needed for committing)
+      # -------------------
+      - name: Checkout repo content
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Important to allow commits
+
+      # -------------------
+      # Setup Python
+      # -------------------
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # -------------------
+      # Install dependencies
+      # -------------------
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install playwright
+          playwright install --with-deps
+
+      # -------------------
+      # Run Bangladesh scraper
+      # -------------------
+      - name: Run Bangladesh
+        run: python bangladesh.py
+
+      # -------------------
+      # Debug: Check CSV changes
+      # -------------------
+      - name: Debug CSV changes
+        run: |
+          ls -lh
+          echo "Checking if BBExchangeRates.csv changed..."
+          git status
+
+      # -------------------
+      # Commit updated CSV if changed
+      # -------------------
+      - name: Commit updated csv and push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          git add BBExchangeRates.csv
+
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Update exchange rates"
+
+            git pull --rebase origin main
+            git push
+
+            echo "CSV updated and pushed."
+          else
+            echo "No changes in CSV file. Skipping commit."
+          fi
